@@ -1,0 +1,147 @@
+/* ============================================================
+   FIELD COMBAT — 页面样式（复古街机机台风）
+   ============================================================ */
+:root{
+  --ink:#0a0c0a;
+  --bez:#1b1f1a;
+  --neon:#7cfcfc;
+  --red:#fc3c3c;
+  --blue:#3cbcfc;
+  --amber:#fce400;
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+html,body{
+  margin:0;padding:0;height:100%;
+  background:
+    radial-gradient(circle at 50% 0%, #23291f 0%, #0b0d0a 55%, #050604 100%);
+  color:#cfd8c8;
+  font-family:"Courier New",Consolas,Menlo,"Microsoft YaHei",monospace;
+  overflow-x:hidden;
+}
+
+#app{
+  min-height:100%;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:18px 12px 40px;
+}
+
+#cabinet{
+  width:100%;max-width:1000px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+}
+
+/* ---------- 顶灯招牌 ---------- */
+.marquee{
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;justify-content:center;
+  letter-spacing:2px;
+  text-shadow:0 0 8px rgba(124,252,252,.55), 0 0 22px rgba(60,188,252,.35);
+}
+.marquee .m1,.marquee .m2{
+  font-weight:bold;font-size:30px;letter-spacing:4px;
+}
+.marquee .m1{color:var(--blue)}
+.marquee .m2{color:var(--neon)}
+.marquee i{
+  font-style:normal;font-size:12px;color:#8a9a80;letter-spacing:1px;
+  text-shadow:none;
+}
+
+/* ---------- 屏幕 ---------- */
+#screenWrap{
+  position:relative;
+  padding:12px;
+  border-radius:10px;
+  background:linear-gradient(#2a3026,#151812);
+  box-shadow:
+    0 0 0 2px #3a4234,
+    0 0 0 6px #10130e,
+    0 18px 40px rgba(0,0,0,.75),
+    inset 0 0 30px rgba(0,0,0,.9);
+  max-width:100%;
+}
+
+#screen{
+  display:block;
+  image-rendering:pixelated;
+  image-rendering:-moz-crisp-edges;
+  image-rendering:crisp-edges;
+  background:#000;
+  border-radius:3px;
+  box-shadow:0 0 18px rgba(60,188,252,.25), inset 0 0 40px rgba(0,0,0,.8);
+  touch-action:none;
+}
+
+/* 扫描线 + 玻璃反光 */
+#scan{
+  position:absolute;inset:12px;pointer-events:none;border-radius:3px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.22) 3px,
+      rgba(0,0,0,0) 4px
+    );
+  mix-blend-mode:multiply;
+}
+#scan::after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse at 30% 0%, rgba(255,255,255,.10), rgba(255,255,255,0) 60%);
+}
+
+/* ---------- 触屏手柄 ---------- */
+.touch{position:absolute;inset:12px;pointer-events:none}
+.touch.hide{display:none}
+.touch .k{
+  pointer-events:auto;
+  position:absolute;
+  border:1px solid rgba(124,252,252,.45);
+  background:rgba(10,30,40,.35);
+  color:rgba(124,252,252,.85);
+  border-radius:10px;
+  font-family:inherit;font-weight:bold;
+  backdrop-filter:blur(2px);
+  user-select:none;
+}
+.touch .k:active{background:rgba(60,188,252,.45);color:#001016}
+
+.touch .pad{position:absolute;left:2%;bottom:2%;width:150px;height:150px}
+.touch .pad .k{width:48px;height:48px;font-size:16px}
+.touch .pad .up{left:51px;top:0}
+.touch .pad .left{left:0;top:51px}
+.touch .pad .right{left:102px;top:51px}
+.touch .pad .down{left:51px;top:102px}
+
+.touch .acts{position:absolute;right:2%;bottom:4%;width:170px;height:120px}
+.touch .acts .k{border-radius:50%;font-size:18px}
+.touch .acts .aa{right:0;bottom:0;width:64px;height:64px;border-color:rgba(252,60,60,.6);color:rgba(252,120,120,.9)}
+.touch .acts .bb{right:74px;bottom:12px;width:56px;height:56px;border-color:rgba(60,188,252,.6)}
+.touch .acts .st{right:0;top:0;width:64px;height:28px;border-radius:6px;font-size:10px}
+
+/* ---------- 下方说明面板 ---------- */
+.panel{
+  width:100%;max-width:1000px;
+  display:grid;grid-template-columns:1fr 1.35fr;gap:14px;
+}
+@media (max-width:760px){ .panel{grid-template-columns:1fr} }
+
+.keys,.brief{
+  border:1px solid #2d3527;border-radius:8px;padding:12px 14px;
+  background:linear-gradient(#171c14,#0e120d);
+}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-content:start}
+.keys b{
+  color:var(--amber);font-size:12px;white-space:nowrap;
+  border:1px solid #4a4430;border-radius:4px;padding:1px 6px;background:#1d1a10;
+}
+.keys em{font-style:normal;font-size:12px;color:#9aa88e}
+
+.brief h2{
+  margin:0 0 8px;font-size:13px;letter-spacing:3px;color:var(--neon);font-weight:bold;
+}
+.brief p{margin:0 0 8px;font-size:12px;line-height:1.7;color:#a8b49c}
+.brief b{color:#e8f0dc}
+.c-b{color:var(--blue) !important}
+.c-r{color:var(--red) !important}
