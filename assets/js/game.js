@@ -12,13 +12,16 @@
    *  常量
    * ============================================================ */
   const W = 256, H = 240;
-  const HUD_H = 30, FIELD_TOP = HUD_H, FIELD_H = H - HUD_H;   // 210
+  const HUD_H = 30, BOTTOM_H = 16;
+  const FIELD_TOP = HUD_H, FIELD_H = H - HUD_H - BOTTOM_H;     // 194
   const WORLD_H = 1800;
-  const CAM_MAX = WORLD_H - FIELD_H;                          // 1590
+  const CAM_MAX = WORLD_H - FIELD_H;                          // 1606
   const VIEW_OFF = 162;                                       // 自机在视野中的垂直位置
   const PLAYER_MIN_Y = 40;
   const BEAM_LEN = 180, BEAM_HALF = 18;
-  const CAP_NEED = 26;
+  const GRAB_SPD = 1.1;                                       // 被捕获敌兵飞向母舰的速度
+  const GRAB_DIST = 13;                                       // 判定捕获成功的距离
+  const ROSTER_MAX = 16;                                      // 底部部队栏最多显示的 icon 数
   const TURRET_Y = 150;
   const TURRET_X = [44, 90, 166, 212];
   const DOOR_L = 100, DOOR_R = 156, DOOR_TOP = 8, DOOR_BOT = 92;
@@ -53,13 +56,14 @@
     heli: { spd: 0.92, cd: 76, range: 112, dmg: 2, w: 14, h: 14, air: true }
   };
 
+  // maxAlive：同屏敌军上限（随关卡/周回递增）
   const STAGES = [
-    { theme: 0, time: 90, spawn: [86, 158], pool: ['soldier', 'soldier', 'soldier', 'keith', 'tank'], air: 0.00, dioroff: 0, turretHp: 3 },
-    { theme: 1, time: 90, spawn: [74, 138], pool: ['soldier', 'soldier', 'keith', 'tank', 'fl880'], air: 0.06, dioroff: 0, turretHp: 3 },
-    { theme: 2, time: 95, spawn: [64, 124], pool: ['soldier', 'keith', 'tank', 'fl880', 'tank'], air: 0.10, dioroff: 1, turretHp: 4 },
-    { theme: 3, time: 95, spawn: [56, 112], pool: ['keith', 'tank', 'fl880', 'soldier', 'tank'], air: 0.13, dioroff: 1, turretHp: 4 },
-    { theme: 4, time: 100, spawn: [48, 104], pool: ['tank', 'fl880', 'keith', 'tank', 'soldier'], air: 0.16, dioroff: 1, turretHp: 5 },
-    { theme: 5, time: 105, spawn: [42, 94], pool: ['tank', 'tank', 'fl880', 'keith', 'fl880'], air: 0.19, dioroff: 2, turretHp: 5 }
+    { theme: 0, time: 90, spawn: [86, 158], pool: ['soldier', 'soldier', 'soldier', 'keith', 'tank'], air: 0.00, dioroff: 0, turretHp: 3, maxAlive: 2 },
+    { theme: 1, time: 90, spawn: [74, 138], pool: ['soldier', 'soldier', 'keith', 'tank', 'fl880'], air: 0.06, dioroff: 0, turretHp: 3, maxAlive: 2 },
+    { theme: 2, time: 95, spawn: [64, 124], pool: ['soldier', 'keith', 'tank', 'fl880', 'tank'], air: 0.10, dioroff: 1, turretHp: 4, maxAlive: 3 },
+    { theme: 3, time: 95, spawn: [56, 112], pool: ['keith', 'tank', 'fl880', 'soldier', 'tank'], air: 0.13, dioroff: 1, turretHp: 4, maxAlive: 3 },
+    { theme: 4, time: 100, spawn: [48, 104], pool: ['tank', 'fl880', 'keith', 'tank', 'soldier'], air: 0.16, dioroff: 1, turretHp: 5, maxAlive: 4 },
+    { theme: 5, time: 105, spawn: [42, 94], pool: ['tank', 'tank', 'fl880', 'keith', 'fl880'], air: 0.19, dioroff: 2, turretHp: 5, maxAlive: 5 }
   ];
 
   const THEMES = [
@@ -167,10 +171,12 @@
     timeLeft: 0, timeMax: 0,
     spawnCd: 0, msgT: 0, msg: '', msgSub: '',
     clearT: 0, overT: 0, nextLife: 0,
-    gateOpen: false, flash: 0
+    gateOpen: false, flash: 0,
+    capFxT: 0, capFxIdx: -1
   };
 
   const stock = { soldier: 0, keith: 0, tank: 0, fl880: 0, heli: 3 };
+  let roster = [];            // 底部部队栏：按捕获顺序记录兵种
   let sel = 0;
 
   let player = null;
@@ -179,7 +185,7 @@
   function resetPlayer() {
     player = {
       x: W / 2, y: WORLD_H - 22, spd: 1.22,
-      alive: true, inv: 150, fireCd: 0, beam: false, beamTick: 0,
+      alive: true, inv: 150, fireCd: 0, beam: false, beamTick: 0, lock: false,
       anim: 0, deadT: 0, spawnT: 0
     };
   }
@@ -276,7 +282,7 @@
       type: type, x: x, y: y, vx: 0, vy: st.spd * (1 + (game.loop - 1) * 0.05),
       hp: Math.ceil(st.hp * hpMul), maxHp: Math.ceil(st.hp * hpMul),
       w: st.w, h: st.h, air: st.air, cap: st.cap,
-      cd: ri(70, st.cd), capProg: 0, stun: 0, flash: 0,
+      cd: ri(70, st.cd), grab: false, spin: 0, flash: 0,
       phase: Math.random() * 6.28, t: 0, dead: false
     };
   }
@@ -328,6 +334,8 @@
     turrets = TURRET_X.map(makeTurret);
 
     stock.soldier = 0; stock.keith = 0; stock.tank = 0; stock.fl880 = 0; stock.heli = 3;
+    roster = ['heli', 'heli', 'heli'];
+    game.capFxT = 0; game.capFxIdx = -1;
     sel = 0;
 
     resetPlayer();
@@ -422,7 +430,17 @@
 
     if (p.inv > 0) p.inv--;
 
-    if (!p.beam) {
+    // 捕获光束：射中敌兵即锁定自机，直到松开 B 键
+    if (p.beam) {
+      p.beamTick++;
+      if (p.beamTick % 14 === 0) AU.sfx('enemyShot');
+      applyBeam();
+    } else {
+      p.beamTick = 0;
+    }
+    p.lock = p.beam && enemies.some(function (e) { return !e.dead && e.grab; });
+
+    if (!p.lock) {
       let dx = (IN.right ? 1 : 0) - (IN.left ? 1 : 0);
       let dy = (IN.down ? 1 : 0) - (IN.up ? 1 : 0);
       if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
@@ -442,18 +460,6 @@
       AU.sfx('missile');
     }
 
-    // 捕获光束
-    if (p.beam) {
-      p.beamTick++;
-      if (p.beamTick % 14 === 0) AU.sfx('enemyShot');
-      applyBeam();
-    } else {
-      p.beamTick = 0;
-      for (let i = 0; i < enemies.length; i++) {
-        if (enemies[i].capProg > 0) enemies[i].capProg = Math.max(0, enemies[i].capProg - 2);
-      }
-    }
-
     // 摄像机
     let target = p.y - VIEW_OFF;
     target = clamp(target, 0, CAM_MAX);
@@ -461,22 +467,21 @@
     camY = clamp(camY, 0, CAM_MAX);
   }
 
+  // 光束扫到敌兵 → 定身并卷入捕获流程（此后由 updateEnemies 牵引飞向母舰）
   function applyBeam() {
     const p = player;
     const top = p.y - BEAM_LEN;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (!e.cap || e.dead) continue;
+      if (!e.cap || e.dead || e.grab) continue;
       const inX = Math.abs(e.x - p.x) < BEAM_HALF + e.w * 0.4;
       const inY = e.y < p.y - 4 && e.y > top;
       if (inX && inY) {
-        e.capProg++;
-        e.stun = 6;
+        e.grab = true;
+        e.spin = 0;
         e.vx = 0;
-        // 被光束向上牵引
-        e.y -= 0.35;
-        if (e.capProg === 1) AU.sfx('hit');
-        if (e.capProg >= CAP_NEED) captureEnemy(e);
+        AU.sfx('hit');
+        fx.push({ type: 'ring', x: e.x, y: e.y, t: 0, life: 16, size: 20, col: PAL.cyan });
       }
     }
   }
@@ -484,7 +489,13 @@
   function captureEnemy(e) {
     const st = ENEMY[e.type];
     e.dead = true;
-    if (stock[e.type] < 9) stock[e.type]++;
+    e.grab = false;
+    if (stock[e.type] < 9) {
+      stock[e.type]++;
+      roster.push(e.type);
+      game.capFxIdx = roster.length - 1;
+      game.capFxT = 34;
+    }
     addScore(st.capScore);
     toast('+' + st.capScore, e.x, e.y, PAL.cyan);
     fx.push({ type: 'ring', x: e.x, y: e.y, t: 0, life: 26, size: 34, col: PAL.cyan });
@@ -503,6 +514,10 @@
     else if (onField >= 5) { AU.sfx('enemyShot'); return; }
 
     stock[t]--;
+    for (let i = roster.length - 1; i >= 0; i--) {
+      if (roster[i] === t) { roster.splice(i, 1); break; }
+    }
+    if (game.capFxIdx >= roster.length) game.capFxIdx = -1;
     const a = makeAlly(t, clamp(player.x + rnd(-14, 14), 16, W - 16), player.y - 26);
     allies.push(a);
     fx.push({ type: 'ring', x: a.x, y: a.y, t: 0, life: 18, size: 22, col: PAL.blueLt });
@@ -515,24 +530,31 @@
     const idx = (game.stage - 1) % 6;
     const cfg = STAGES[idx];
 
-    // 生成
+    // 生成（同屏敌军数量受限，随关卡与周回递增）
+    const maxAlive = cfg.maxAlive + (game.loop - 1);
+    const countAlive = function () {
+      return enemies.filter(function (e) { return !e.dead; }).length;
+    };
     if (!game.gateOpen) {
       game.spawnCd--;
       if (game.spawnCd <= 0) {
         const iv = cfg.spawn;
         game.spawnCd = Math.round(rnd(iv[0], iv[1]) * Math.max(0.55, 1 - (game.loop - 1) * 0.10));
-        const n = Math.random() < 0.18 ? 2 : 1;
-        for (let i = 0; i < n; i++) {
-          let type = cfg.pool[ri(0, cfg.pool.length - 1)];
-          if (Math.random() < cfg.air) type = 'heli';
-          const x = ri(20, W - 20);
-          enemies.push(makeEnemy(type, x, camY - ri(18, 46) - i * 22));
+        const alive = countAlive();
+        if (alive < maxAlive) {
+          const n = (alive + 1 < maxAlive && Math.random() < 0.30) ? 2 : 1;
+          for (let i = 0; i < n; i++) {
+            let type = cfg.pool[ri(0, cfg.pool.length - 1)];
+            if (Math.random() < cfg.air) type = 'heli';
+            const x = ri(20, W - 20);
+            enemies.push(makeEnemy(type, x, camY - ri(18, 46) - i * 22));
+          }
         }
       }
       // ディオロフ
       if (cfg.dioroff > 0) {
         const alive = enemies.filter(function (e) { return e.type === 'dioroff'; }).length;
-        if (alive < cfg.dioroff && Math.random() < 0.0025) {
+        if (alive < cfg.dioroff && countAlive() < maxAlive + 1 && Math.random() < 0.0025) {
           enemies.push(makeEnemy('dioroff', ri(50, W - 50), camY - 40));
         }
       }
@@ -555,8 +577,20 @@
         continue;
       }
 
-      // 被光束定住
-      if (e.stun > 0) { e.stun--; continue; }
+      // 被捕获光束锁定：定身无法攻击，边旋转边缓慢飞向母舰
+      if (e.grab) {
+        if (!player || !player.alive || !player.beam) {
+          e.grab = false;                       // 松开 B 键 → 放走
+        } else {
+          e.spin += 0.42;
+          const gdx = player.x - e.x, gdy = player.y - e.y;
+          const gd = Math.hypot(gdx, gdy) || 1;
+          if (gd <= GRAB_DIST) { captureEnemy(e); continue; }
+          e.x += gdx / gd * GRAB_SPD;
+          e.y += gdy / gd * GRAB_SPD;
+          continue;
+        }
+      }
 
       e.y += e.vy;
       // 横向机动
@@ -613,25 +647,25 @@
 
     switch (st.fire) {
       case 'rifle':
-        aim(1.3, 0.09, 1, 'rifle');
+        aim(1.05, 0.09, 1, 'rifle');
         AU.sfx('enemyShot');
         break;
       case 'mg':
-        aim(1.95, 0.13, 1, 'rifle');
-        if (Math.random() < 0.3) aim(1.95, 0.17, 1, 'rifle');
+        aim(1.5, 0.13, 1, 'rifle');
+        if (Math.random() < 0.3) aim(1.5, 0.17, 1, 'rifle');
         AU.sfx('enemyShot');
         break;
       case 'shell':
-        aim(1.25, 0.05, 2, 'shell');
+        aim(1.0, 0.05, 2, 'shell');
         AU.sfx('shell');
         break;
       case 'longshell':
-        aim(1.6, 0.04, 2, 'shell');
+        aim(1.25, 0.04, 2, 'shell');
         AU.sfx('shell');
         break;
       case 'dioroff':
-        if (e.t % 300 < 150) { aim(1.85, 0.12, 1, 'rifle'); aim(1.85, 0.16, 1, 'rifle'); }
-        else { aim(1.4, 0.07, 2, 'shell'); }
+        if (e.t % 300 < 150) { aim(1.45, 0.12, 1, 'rifle'); aim(1.45, 0.16, 1, 'rifle'); }
+        else { aim(1.1, 0.07, 2, 'shell'); }
         AU.sfx('enemyShot');
         break;
     }
@@ -657,7 +691,7 @@
         t.cd = Math.round(rnd(110, 175) / (1 + (game.loop - 1) * 0.10));
         const dx = player.x - t.x, dy = player.y - t.y;
         const d = Math.hypot(dx, dy) || 1;
-        ebul.push({ x: t.x, y: t.y + 8, vx: dx / d * 1.9, vy: dy / d * 1.9, dmg: 1, w: 5, h: 11, team: 1, kind: 'shell', t: 0 });
+        ebul.push({ x: t.x, y: t.y + 8, vx: dx / d * 1.5, vy: dy / d * 1.5, dmg: 1, w: 5, h: 11, team: 1, kind: 'shell', t: 0 });
         AU.sfx('shell');
       }
     }
@@ -789,7 +823,7 @@
     if (!player || !player.alive || player.inv > 0) return;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (e.dead) continue;
+      if (e.dead || e.grab) continue;        // 被光束牵引的敌兵不造成碰撞伤害
       const risk = (e.type === 'dioroff') ? 12 : 7;
       if (Math.abs(e.x - player.x) < (e.w + risk) * 0.5 && Math.abs(e.y - player.y) < (e.h + risk) * 0.5) {
         killPlayer();
@@ -826,6 +860,8 @@
     if (!p.alive) return;
     p.alive = false;
     p.beam = false;
+    p.lock = false;
+    for (let i = 0; i < enemies.length; i++) enemies[i].grab = false;
     p.deadT = 100;
     game.lives--;
     boom(p.x, p.y, 30);
@@ -842,6 +878,7 @@
   }
 
   function updateFx() {
+    if (game.capFxT > 0) game.capFxT--;
     for (let i = fx.length - 1; i >= 0; i--) {
       const f = fx[i];
       f.t++;
@@ -916,6 +953,7 @@
     ctx.restore();
 
     drawHud();
+    drawBottom();
     drawBanner();
 
     if (game.mode === 'pause') drawPause();
@@ -967,6 +1005,22 @@
       if (y < FIELD_TOP - 40 || y > H + 40) continue;
       const set = e.type === 'dioroff' ? S.dioroff : S[e.type];
       const spr = e.air ? (set.enemyUp) : set.enemy;
+
+      // 被捕获：定身旋转 + 环绕光点，正向母舰飘移
+      if (e.grab) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(e.spin);
+        ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+        ctx.restore();
+        ctx.fillStyle = PAL.cyan;
+        for (let k = 0; k < 4; k++) {
+          const ang = e.spin * 1.7 + k * Math.PI / 2;
+          ctx.fillRect(Math.round(x + Math.cos(ang) * 11) - 1, Math.round(y + Math.sin(ang) * 11) - 1, 2, 2);
+        }
+        continue;
+      }
+
       ctx.drawImage(spr, x - spr.width / 2, y - spr.height / 2);
 
       if (e.flash > 0) {
@@ -983,14 +1037,6 @@
         ctx.fillRect(x - w / 2, y - spr.height / 2 - 4, w, 2);
         ctx.fillStyle = PAL.redBr;
         ctx.fillRect(x - w / 2, y - spr.height / 2 - 4, Math.max(0, w * e.hp / e.maxHp), 2);
-      }
-      // 捕获进度
-      if (e.capProg > 0 && e.cap) {
-        const w = 20;
-        ctx.fillStyle = PAL.black;
-        ctx.fillRect(x - w / 2 - 1, y + spr.height / 2 + 1, w + 2, 4);
-        ctx.fillStyle = PAL.cyan;
-        ctx.fillRect(x - w / 2, y + spr.height / 2 + 2, w * e.capProg / CAP_NEED, 2);
       }
     }
   }
@@ -1242,6 +1288,35 @@
     const warn = ratio < 0.25;
     ctx.fillStyle = warn && Math.floor(frameNo / 8) % 2 === 0 ? PAL.redBr : (warn ? PAL.orange : PAL.greenLt);
     ctx.fillRect(2, 28, Math.round(252 * ratio), 2);
+  }
+
+  // 底部部队栏：每捕获一名敌兵就多出一个该兵种的小 icon
+  function drawBottom() {
+    const top = H - BOTTOM_H;
+    ctx.fillStyle = '#070a07';
+    ctx.fillRect(0, top, W, BOTTOM_H);
+    ctx.fillStyle = '#1c2a1c';
+    ctx.fillRect(0, top, W, 1);
+
+    text(ctx, 'ARMY', 3, top + 5, PAL.grayDk);
+
+    const pitch = 12, size = 10, startX = 32, iy = top + 3;
+    const shown = Math.min(roster.length, ROSTER_MAX);
+    for (let i = 0; i < shown; i++) {
+      const x = startX + i * pitch;
+      let w = size, off = 0;
+      if (game.capFxT > 0 && i === game.capFxIdx) {
+        const k = game.capFxT / 34;
+        w = Math.round(size + 6 * k);
+        off = Math.round((w - size) / 2);
+        ctx.fillStyle = 'rgba(124,252,252,' + (0.7 * k).toFixed(2) + ')';
+        ctx.fillRect(x - off - 1, iy - off - 1, w + 2, w + 2);
+      }
+      ctx.drawImage(S.icon[roster[i]], 0, 0, 16, 16, x - off, iy - off, w, w);
+    }
+    if (roster.length > ROSTER_MAX) {
+      text(ctx, '+' + (roster.length - ROSTER_MAX), startX + ROSTER_MAX * pitch, top + 5, PAL.cyan);
+    }
   }
 
   function drawBanner() {
