@@ -220,43 +220,50 @@
     R(6, 11, 4, 1, PAL.cyan);
   }
 
-  // 步兵 ソルジャー（pose: 0/1 = 行走两帧, 2 = 站立, 'fire' = 蹲下扛火箭筒）
+  // 步兵 ソルジャー（俯视，枪口朝前/上）
+  //   pose: 0/1 = 行走两帧, 2 = 站立, 'fire' = 蹲下扛火箭筒
   function dSoldierPose(R, P, D, G, t, pose) {
+    const steel = PAL.grayDk, mech = PAL.grayDk2, boot = PAL.grayDk3;
+
+    /* --- 蹲下扛火箭筒瞄准 --- */
     if (pose === 'fire') {
-      // 蹲伏瞄准：压低身体，肩扛火箭筒
-      R(6, 5, 4, 1, t.light);          // 钢盔
-      R(5, 6, 6, 1, t.light);
-      R(4, 7, 8, 3, t.main);           // 蹲下的躯干
-      R(4, 9, 8, 1, t.dark);
-      R(3, 10, 10, 2, t.gun);          // 屈膝的腿
-      R(3, 12, 4, 1, PAL.grayDk2);
-      R(9, 12, 4, 1, PAL.grayDk2);
-      R(7, 1, 2, 7, PAL.grayDk2);      // 火箭筒管
+      R(7, 1, 2, 5, mech);             // 火箭筒管
       R(6, 1, 4, 2, PAL.gray);         // 筒口
-      R(5, 7, 6, 2, t.dark);           // 肩托
+      R(6, 5, 4, 1, t.dark);           // 肩托
+      R(5, 6, 6, 3, t.main);           // 压低的躯干
+      R(5, 6, 6, 1, t.light);          // 背部高光
+      R(5, 8, 6, 1, t.dark);           // 腰带
+      R(4, 9, 8, 2, t.main);           // 髋部与大腿
+      P(4, 9, t.light); P(11, 9, t.light);
+      R(4, 11, 3, 3, mech);            // 屈膝
+      R(9, 11, 3, 3, mech);
+      P(4, 14, boot); P(5, 14, boot);
+      P(10, 14, boot); P(11, 14, boot);
       return;
     }
-    // 头 / 躯干（行走与站立共用）
-    R(6, 3, 4, 1, t.light);
-    R(5, 4, 6, 1, t.light);
-    R(5, 5, 6, 1, t.main);
-    R(5, 6, 6, 1, t.main);
-    R(6, 7, 4, 1, t.dark);
-    R(4, 5, 1, 2, t.dark); R(11, 5, 1, 2, t.dark);
-    R(7, 6, 2, 5, PAL.grayDk2);        // 步枪
-    if (pose === 0) {                  // 左腿踏出
-      R(5, 8, 2, 3, t.gun);
-      R(9, 8, 2, 5, t.gun);
-      P(5, 10, PAL.gray); P(10, 13, PAL.gray);
-    } else if (pose === 1) {           // 右腿踏出
-      R(5, 8, 2, 5, t.gun);
-      R(9, 8, 2, 3, t.gun);
-      P(5, 13, PAL.gray); P(10, 10, PAL.gray);
+
+    /* --- 立姿：步枪 → 双手 → 钢盔 → 肩臂 → 躯干 → 双腿 --- */
+    R(7, 1, 2, 3, steel);              // 步枪
+    P(7, 1, PAL.gray); P(8, 1, PAL.gray);
+    R(6, 4, 4, 1, t.main);             // 双手握枪
+    R(6, 5, 4, 1, t.light);            // 盔顶
+    R(5, 6, 6, 1, t.light);            // 钢盔
+    P(5, 7, t.dark); P(10, 7, t.dark); // 盔沿阴影
+    R(6, 7, 4, 1, t.light);
+    R(6, 8, 4, 1, t.main);             // 颈部
+    R(4, 9, 8, 2, t.main);             // 双肩 / 手臂
+    P(4, 9, t.light); P(11, 9, t.light);  // 肩头高光
+    R(5, 11, 6, 2, t.main);            // 躯干
+    R(5, 12, 6, 1, t.dark);            // 腰部阴影
+    if (pose === 0) {                  // 左腿前迈
+      R(5, 13, 2, 1, mech); R(9, 13, 2, 2, mech);
+    } else if (pose === 1) {           // 右腿前迈
+      R(5, 13, 2, 2, mech); R(9, 13, 2, 1, mech);
     } else {                           // 站立
-      R(5, 8, 2, 5, t.gun);
-      R(9, 8, 2, 5, t.gun);
-      P(5, 13, PAL.gray); P(10, 13, PAL.gray);
+      R(5, 13, 2, 2, mech); R(9, 13, 2, 2, mech);
     }
+    P(5, 14, boot); P(6, 14, boot);
+    P(9, 14, boot); P(10, 14, boot);
   }
 
   function dSoldier(R, P, D, G, t) { dSoldierPose(R, P, D, G, t, 2); }
@@ -304,17 +311,37 @@
     P(3, 11, t.trim); P(12, 11, t.trim);
   }
 
-  // 武装直升机 ルイス-T
+  // 舰载战斗机（俯视，机首朝上）—— 变后掠翼 F-14 雄猫
   function dHeli(R, P, D, G, t) {
-    G(7, 7, 7, PAL.grayDk2);       // 旋翼
-    G(7, 7, 6, PAL.grayDk3);
-    D(7, 8, 3, t.main);            // 机身
-    R(6, 4, 3, 3, t.light);        // 机首
-    R(6, 3, 3, 1, t.trim);
-    R(4, 11, 8, 1, t.dark);
-    R(3, 12, 3, 1, PAL.grayDk2);
-    R(11, 12, 3, 1, PAL.grayDk2);
-    P(7, 13, PAL.grayDk2); P(7, 14, PAL.grayDk2);
+    const jet = PAL.grayDk2, glass = PAL.cyan, glassDk = PAL.blueDk;
+    // 细长机首
+    R(7, 0, 2, 3, t.light);
+    R(7, 3, 2, 1, t.main);
+    // 座舱盖
+    R(6, 3, 4, 1, t.main);
+    R(6, 4, 4, 2, t.main);
+    R(7, 4, 2, 2, glass);
+    P(7, 5, glassDk); P(8, 5, glassDk);
+    // 机身与翼套
+    R(5, 6, 6, 3, t.main);
+    R(6, 6, 4, 3, t.light);
+    // 变后掠主翼（前缘高光 + 后掠翼尖）
+    R(3, 8, 10, 1, t.light);
+    R(2, 9, 12, 1, t.main);
+    R(1, 10, 4, 1, t.main);
+    R(11, 10, 4, 1, t.main);
+    P(1, 10, t.trim); P(14, 10, t.trim);
+    // 尾段
+    R(5, 10, 6, 2, t.main);
+    R(5, 12, 6, 1, t.dark);
+    // 双垂尾
+    R(4, 11, 2, 4, t.light);
+    R(10, 11, 2, 4, t.light);
+    R(4, 14, 2, 1, t.dark); R(10, 14, 2, 1, t.dark);
+    // 双发尾喷口
+    R(6, 12, 2, 4, jet);
+    R(8, 12, 2, 4, jet);
+    R(6, 15, 2, 1, PAL.black); R(8, 15, 2, 1, PAL.black);
   }
 
   // 敌军主力兵器 ディオロフ（24x24）

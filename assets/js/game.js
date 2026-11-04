@@ -1083,7 +1083,8 @@
         if (e.fireT > 0) spr = S.soldierFire.enemy;
         else spr = S.soldierWalk[(e.anim >> 3) & 1].enemy;
       } else {
-        spr = e.air ? set.enemyUp : set.enemy;
+        // 敌军一律机首朝下（面向自机所在的下方）
+        spr = set.enemy;
       }
 
       // 被捕获：定身旋转 + 环绕光点，正向母舰飘移
@@ -1127,7 +1128,7 @@
       const x = Math.round(a.x), y = Math.round(screenY(a.y));
       if (y < FIELD_TOP - 40 || y > H + 40) continue;
       const set = S[a.type];
-      const spr = a.air ? set.enemyUp : set.ally;
+      const spr = set.ally;   // 友军一律机首朝上（迎击上方的敌军）
       ctx.drawImage(spr, x - spr.width / 2, y - spr.height / 2);
       if (a.flash > 0) {
         ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -1453,7 +1454,7 @@
     ctx.drawImage(S.genesis, Math.round(bx - 8), 140);
     ctx.drawImage(S.tank.enemy, 60, Math.round(150 + Math.sin(t * 0.05) * 6));
     ctx.drawImage(S.soldier.enemy, 200, Math.round(160 + Math.cos(t * 0.06) * 5));
-    ctx.drawImage(S.heli.enemyUp, 150, Math.round(190 + Math.sin(t * 0.04) * 8));
+    ctx.drawImage(S.heli.enemy, 150, Math.round(190 + Math.sin(t * 0.04) * 8));
 
     if (Math.floor(t / 30) % 2 === 0) {
       textC(ctx, 'PRESS ENTER TO START', W / 2, 205, PAL.yellow);
