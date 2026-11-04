@@ -220,17 +220,46 @@
     R(6, 11, 4, 1, PAL.cyan);
   }
 
-  // 步兵 ソルジャー
-  function dSoldier(R, P, D, G, t) {
+  // 步兵 ソルジャー（pose: 0/1 = 行走两帧, 2 = 站立, 'fire' = 蹲下扛火箭筒）
+  function dSoldierPose(R, P, D, G, t, pose) {
+    if (pose === 'fire') {
+      // 蹲伏瞄准：压低身体，肩扛火箭筒
+      R(6, 5, 4, 1, t.light);          // 钢盔
+      R(5, 6, 6, 1, t.light);
+      R(4, 7, 8, 3, t.main);           // 蹲下的躯干
+      R(4, 9, 8, 1, t.dark);
+      R(3, 10, 10, 2, t.gun);          // 屈膝的腿
+      R(3, 12, 4, 1, PAL.grayDk2);
+      R(9, 12, 4, 1, PAL.grayDk2);
+      R(7, 1, 2, 7, PAL.grayDk2);      // 火箭筒管
+      R(6, 1, 4, 2, PAL.gray);         // 筒口
+      R(5, 7, 6, 2, t.dark);           // 肩托
+      return;
+    }
+    // 头 / 躯干（行走与站立共用）
     R(6, 3, 4, 1, t.light);
     R(5, 4, 6, 1, t.light);
     R(5, 5, 6, 1, t.main);
     R(5, 6, 6, 1, t.main);
     R(6, 7, 4, 1, t.dark);
     R(4, 5, 1, 2, t.dark); R(11, 5, 1, 2, t.dark);
-    R(7, 8, 2, 5, t.gun);
-    P(7, 13, PAL.gray);
+    R(7, 6, 2, 5, PAL.grayDk2);        // 步枪
+    if (pose === 0) {                  // 左腿踏出
+      R(5, 8, 2, 3, t.gun);
+      R(9, 8, 2, 5, t.gun);
+      P(5, 10, PAL.gray); P(10, 13, PAL.gray);
+    } else if (pose === 1) {           // 右腿踏出
+      R(5, 8, 2, 5, t.gun);
+      R(9, 8, 2, 3, t.gun);
+      P(5, 13, PAL.gray); P(10, 10, PAL.gray);
+    } else {                           // 站立
+      R(5, 8, 2, 5, t.gun);
+      R(9, 8, 2, 5, t.gun);
+      P(5, 13, PAL.gray); P(10, 13, PAL.gray);
+    }
   }
+
+  function dSoldier(R, P, D, G, t) { dSoldierPose(R, P, D, G, t, 2); }
 
   // 装甲车 キース
   function dKeith(R, P, D, G, t) {
@@ -357,6 +386,12 @@
   S.genesisRed = mk(16, 16, (R, P, D, G) => dGenesis(R, P, D, G, T_ENEMY));
 
   S.soldier = unit('soldier', dSoldier, 16, 16);
+  // 步兵行走两帧 + 蹲下扛火箭筒
+  S.soldierWalk = [
+    unit('soldierW0', (R, P, D, G, t) => dSoldierPose(R, P, D, G, t, 0), 16, 16),
+    unit('soldierW1', (R, P, D, G, t) => dSoldierPose(R, P, D, G, t, 1), 16, 16)
+  ];
+  S.soldierFire = unit('soldierF', (R, P, D, G, t) => dSoldierPose(R, P, D, G, t, 'fire'), 16, 16);
   S.keith = unit('keith', dKeith, 16, 16);
   S.tank = unit('tank', dTank, 16, 16);
   S.fl880 = unit('fl880', dFL880, 16, 16);

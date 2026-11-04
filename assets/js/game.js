@@ -22,6 +22,9 @@
   const GRAB_SPD = 1.1;                                       // 被捕获敌兵飞向母舰的速度
   const GRAB_DIST = 13;                                       // 判定捕获成功的距离
   const ROSTER_MAX = 16;                                      // 底部部队栏最多显示的 icon 数
+  const PLAYER_RANGE = 140;                                   // 自机导弹射程
+  const ENEMY_BAND_BOT = 172;                                 // 敌军游走区域下边界（相对视野顶部）
+  const TURRET_RANGE = 150;                                   // 炮台射程
   const TURRET_Y = 150;
   const TURRET_X = [44, 90, 166, 212];
   const DOOR_L = 100, DOOR_R = 156, DOOR_TOP = 8, DOOR_BOT = 92;
@@ -39,13 +42,18 @@
   const TYPES = ['soldier', 'keith', 'tank', 'fl880', 'heli'];
   const NAME = { soldier: 'SOLDIER', keith: 'KEITH', tank: 'HEL-99A', fl880: 'FL-880', heli: 'LEWIS-T', dioroff: 'DIOROFF' };
 
+  // 设计基准（最慢的是步兵 → 坦克 → 飞机）
+  //   步兵：移动最慢、走路的动态、蹲下扛火箭筒射击、射程=自机、被打中一击必杀
+  //   坦克：移动慢、射程比自机更远一点、带血条
+  //   飞机：移动快、飞行轨迹多变、射程=自机、被打中一击必杀
+  // spd = 游走速度；range = 弹丸射程
   const ENEMY = {
-    soldier: { hp: 1, spd: 0.34, cd: 142, dmg: 1, cap: true, kill: 200, capScore: 300, w: 10, h: 10, air: false, fire: 'rifle' },
-    keith: { hp: 2, spd: 0.68, cd: 110, dmg: 1, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'mg' },
-    tank: { hp: 4, spd: 0.31, cd: 152, dmg: 2, cap: true, kill: 600, capScore: 700, w: 14, h: 14, air: false, fire: 'shell' },
-    fl880: { hp: 2, spd: 0.27, cd: 172, dmg: 2, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'longshell' },
-    heli: { hp: 2, spd: 0.66, cd: 120, dmg: 1, cap: false, kill: 500, capScore: 0, w: 14, h: 14, air: true, fire: 'mg' },
-    dioroff: { hp: 16, spd: 0.23, cd: 132, dmg: 2, cap: false, kill: 2000, capScore: 0, w: 20, h: 20, air: false, fire: 'dioroff' }
+    soldier: { hp: 1, spd: 0.30, cd: 130, dmg: 1, cap: true, kill: 200, capScore: 300, w: 10, h: 10, air: false, fire: 'bazooka', range: 140 },
+    keith: { hp: 2, spd: 0.55, cd: 112, dmg: 1, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'mg', range: 115 },
+    tank: { hp: 5, spd: 0.42, cd: 150, dmg: 2, cap: true, kill: 600, capScore: 700, w: 14, h: 14, air: false, fire: 'shell', range: 160 },
+    fl880: { hp: 2, spd: 0.38, cd: 168, dmg: 2, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'longshell', range: 180 },
+    heli: { hp: 1, spd: 1.05, cd: 118, dmg: 1, cap: false, kill: 500, capScore: 0, w: 14, h: 14, air: true, fire: 'mg', range: 140 },
+    dioroff: { hp: 16, spd: 0.22, cd: 132, dmg: 2, cap: false, kill: 2000, capScore: 0, w: 20, h: 20, air: false, fire: 'dioroff', range: 150 }
   };
 
   const ALLY = {
@@ -279,9 +287,15 @@
     const st = ENEMY[type];
     const hpMul = 1 + (game.loop - 1) * 0.2;
     return {
-      type: type, x: x, y: y, vx: 0, vy: st.spd * (1 + (game.loop - 1) * 0.05),
+      type: type, x: x, y: y,
       hp: Math.ceil(st.hp * hpMul), maxHp: Math.ceil(st.hp * hpMul),
       w: st.w, h: st.h, air: st.air, cap: st.cap,
+      // 游走：不再径直飞出画面，而是留在视野内晃来晃去
+      homeOff: st.air ? ri(56, 112) : ri(24, 156),
+      wob: Math.random() * 6.28,
+      wobSpd: st.air ? 0.07 : rnd(0.012, 0.026),
+      dirX: Math.random() < 0.5 ? -1 : 1,
+      anim: 0, fireT: 0,
       cd: ri(70, st.cd), grab: false, spin: 0, flash: 0,
       phase: Math.random() * 6.28, t: 0, dead: false
     };
@@ -456,7 +470,7 @@
     const wantFire = !!IN.a && aPend < 0 && !beamSuppress;
     if (wantFire && !p.beam && p.fireCd <= 0) {
       p.fireCd = 17;
-      pbul.push({ x: p.x, y: p.y - 12, vx: 0, vy: -4.4, dmg: 1, w: 6, h: 12, team: 0, kind: 'missile', t: 0 });
+      pbul.push({ x: p.x, y: p.y - 12, vx: 0, vy: -4.4, dmg: 1, w: 6, h: 12, team: 0, kind: 'missile', t: 0, dist: 0, range: PLAYER_RANGE });
       AU.sfx('missile');
     }
 
@@ -479,7 +493,6 @@
       if (inX && inY) {
         e.grab = true;
         e.spin = 0;
-        e.vx = 0;
         AU.sfx('hit');
         fx.push({ type: 'ring', x: e.x, y: e.y, t: 0, life: 16, size: 20, col: PAL.cyan });
       }
@@ -563,6 +576,7 @@
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       if (e.dead) { enemies.splice(i, 1); continue; }
+      const st = ENEMY[e.type];
 
       e.t++;
       if (e.flash > 0) e.flash--;
@@ -570,7 +584,6 @@
       // 死亡爆炸
       if (e.hp <= 0 && !e.dead) {
         e.dead = true;
-        const st = ENEMY[e.type];
         addScore(st.kill);
         boom(e.x, e.y, e.type === 'dioroff' ? 30 : 16);
         AU.sfx(e.type === 'dioroff' ? 'bigBoom' : 'boom');
@@ -592,22 +605,32 @@
         }
       }
 
-      e.y += e.vy;
-      // 横向机动
-      if (e.type === 'keith' || e.type === 'heli' || e.type === 'soldier') {
-        e.x += Math.sin(e.t * (e.type === 'heli' ? 0.05 : 0.03) + e.phase) * (e.type === 'keith' ? 0.9 : 0.5);
-      } else if (e.type === 'fl880') {
-        if (e.y > camY + 120) e.vy = 0;
-      } else if (e.type === 'dioroff') {
-        e.x += Math.sin(e.t * 0.02) * 0.5;
+      // 游走：留在视野带内晃来晃去，不径直飞出画面
+      e.wob += e.wobSpd;
+      e.anim++;
+      if (e.fireT > 0) e.fireT--;
+      if (e.air) {
+        // 飞机：移动快、轨迹多变（多段正弦叠加成蛇形/8 字）
+        e.x += e.dirX * st.spd;
+        if (e.x < 18) { e.x = 18; e.dirX = 1; }
+        if (e.x > W - 18) { e.x = W - 18; e.dirX = -1; }
+        e.y = camY + e.homeOff + Math.sin(e.wob * 1.7 + e.phase) * 22 + Math.sin(e.wob * 0.7) * 10;
+      } else {
+        // 地面部队：缓慢巡逻 + 向自己的游走高度靠拢
+        e.x += e.dirX * st.spd;
+        if (e.x < 20) { e.x = 20; e.dirX = 1; }
+        if (e.x > W - 20) { e.x = W - 20; e.dirX = -1; }
+        const ty = camY + e.homeOff + Math.sin(e.wob * 2.1 + e.phase) * 3;
+        e.y += (ty - e.y) * 0.04;
       }
       e.x = clamp(e.x, 12, W - 12);
+      // 只压住下边界：敌军从上方缓缓进入视野，不会越过自机飞走
+      if (e.y > camY + ENEMY_BAND_BOT) e.y = camY + ENEMY_BAND_BOT;
 
       // 射击
       e.cd--;
       if (e.cd <= 0 && e.y > camY - 10 && e.y < camY + FIELD_H) {
         enemyFire(e);
-        const st = ENEMY[e.type];
         e.cd = Math.round(st.cd * rnd(0.75, 1.25) / (1 + (game.loop - 1) * 0.10));
       }
 
@@ -633,7 +656,7 @@
   function enemyFire(e) {
     const p = player;
     const st = ENEMY[e.type];
-    const aim = function (speed, spread, dmg, kind) {
+    const aim = function (speed, spread, dmg, kind, range) {
       let dx = 0, dy = 1;
       if (p && p.alive) {
         dx = p.x - e.x; dy = p.y - e.y;
@@ -642,10 +665,19 @@
       }
       dx += rnd(-spread, spread); dy += rnd(-spread, spread);
       const d2 = Math.hypot(dx, dy) || 1;
-      ebul.push({ x: e.x, y: e.y + 8, vx: dx / d2 * speed, vy: dy / d2 * speed, dmg: dmg, w: 5, h: 11, team: 1, kind: kind, t: 0 });
+      ebul.push({
+        x: e.x, y: e.y + 8, vx: dx / d2 * speed, vy: dy / d2 * speed,
+        dmg: dmg, w: 5, h: 11, team: 1, kind: kind, t: 0,
+        dist: 0, range: range || st.range
+      });
     };
 
     switch (st.fire) {
+      case 'bazooka':                    // 步兵：蹲下扛火箭筒，射程与自机相同
+        aim(1.5, 0.05, 2, 'shell', PLAYER_RANGE);
+        e.fireT = 26;
+        AU.sfx('shell');
+        break;
       case 'rifle':
         aim(1.05, 0.09, 1, 'rifle');
         AU.sfx('enemyShot');
@@ -691,7 +723,10 @@
         t.cd = Math.round(rnd(110, 175) / (1 + (game.loop - 1) * 0.10));
         const dx = player.x - t.x, dy = player.y - t.y;
         const d = Math.hypot(dx, dy) || 1;
-        ebul.push({ x: t.x, y: t.y + 8, vx: dx / d * 1.5, vy: dy / d * 1.5, dmg: 1, w: 5, h: 11, team: 1, kind: 'shell', t: 0 });
+        ebul.push({
+          x: t.x, y: t.y + 8, vx: dx / d * 1.5, vy: dy / d * 1.5, dmg: 1,
+          w: 5, h: 11, team: 1, kind: 'shell', t: 0, dist: 0, range: TURRET_RANGE
+        });
         AU.sfx('shell');
       }
     }
@@ -750,17 +785,24 @@
     pbul.push({
       x: a.x, y: a.y - 8, vx: dx / d * sp, vy: dy / d * sp, dmg: st.dmg,
       w: 5, h: 11, team: 0, kind: a.type === 'tank' ? 'shell' : 'missile', t: 0,
-      col: PAL.blueLt
+      col: PAL.blueLt, dist: 0, range: st.range + 24
     });
     AU.sfx('enemyShot');
   }
 
   /* ---------- 子弹 ---------- */
+  // 弹丸飞到射程尽头 → 小小的爆炸效果
+  function expireShot(b) {
+    fx.push({ type: 'boom', x: b.x, y: b.y, t: 0, life: 12, size: 7 });
+  }
+
   function updateBullets() {
     for (let i = pbul.length - 1; i >= 0; i--) {
       const b = pbul[i];
       b.x += b.vx; b.y += b.vy; b.t++;
+      b.dist = (b.dist || 0) + Math.hypot(b.vx, b.vy);
       let gone = (b.y < camY - 30 || b.y > camY + FIELD_H + 30 || b.x < -20 || b.x > W + 20);
+      if (!gone && b.range && b.dist >= b.range) { expireShot(b); gone = true; }
 
       if (!gone) {
         for (let j = 0; j < enemies.length; j++) {
@@ -792,7 +834,9 @@
     for (let i = ebul.length - 1; i >= 0; i--) {
       const b = ebul[i];
       b.x += b.vx; b.y += b.vy; b.t++;
+      b.dist = (b.dist || 0) + Math.hypot(b.vx, b.vy);
       let gone = (b.y < camY - 30 || b.y > camY + FIELD_H + 30 || b.x < -20 || b.x > W + 20);
+      if (!gone && b.range && b.dist >= b.range) { expireShot(b); gone = true; }
 
       if (!gone && player && player.alive && player.inv <= 0) {
         if (Math.abs(b.x - player.x) < (b.w + 7) * 0.5 && Math.abs(b.y - player.y) < (b.h + 7) * 0.5) {
@@ -1004,7 +1048,14 @@
       const x = Math.round(e.x), y = Math.round(screenY(e.y));
       if (y < FIELD_TOP - 40 || y > H + 40) continue;
       const set = e.type === 'dioroff' ? S.dioroff : S[e.type];
-      const spr = e.air ? (set.enemyUp) : set.enemy;
+      let spr;
+      if (e.type === 'soldier') {
+        // 步兵：行走两帧动画；开火瞬间切换为蹲下扛火箭筒
+        if (e.fireT > 0) spr = S.soldierFire.enemy;
+        else spr = S.soldierWalk[(e.anim >> 3) & 1].enemy;
+      } else {
+        spr = e.air ? set.enemyUp : set.enemy;
+      }
 
       // 被捕获：定身旋转 + 环绕光点，正向母舰飘移
       if (e.grab) {
