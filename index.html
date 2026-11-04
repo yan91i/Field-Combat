@@ -34,26 +34,34 @@
       </div>
     </div>
 
+    <div class="langbar">
+      <span class="lb-t" data-i18n="langLabel">语言 / Language</span>
+      <div class="lb-btns">
+        <button type="button" data-lang="zh" aria-pressed="false">中文</button>
+        <button type="button" data-lang="en" aria-pressed="false">English</button>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="keys">
-        <b>方向键 / WASD</b><em>移动母舰</em>
-        <b>Z 或 J</b><em>A键 · 导弹</em>
-        <b>X 或 K</b><em>B键 · 捕获光束</em>
-        <b>Z + X</b><em>同时按 · 派出友军</em>
-        <b>1 ~ 5</b><em>切换兵种 · Q/E 循环</em>
-        <b>Enter</b><em>开始 / 暂停</em>
-        <b>M</b><em>静音</em>
+        <b data-i18n="keyMove">方向键 / WASD</b><em data-i18n="keyMoveDesc">移动母舰</em>
+        <b data-i18n="keyA">Z 或 J</b><em data-i18n="keyADesc">A键 · 导弹</em>
+        <b data-i18n="keyB">X 或 K</b><em data-i18n="keyBDesc">B键 · 捕获光束</em>
+        <b data-i18n="keyAB">Z + X</b><em data-i18n="keyABDesc">同时按 · 派出友军</em>
+        <b data-i18n="keyNum">1 ~ 5</b><em data-i18n="keyNumDesc">切换兵种 · Q/E 循环</em>
+        <b data-i18n="keyEnter">Enter</b><em data-i18n="keyEnterDesc">开始 / 暂停</em>
+        <b data-i18n="keyM">M</b><em data-i18n="keyMDesc">静音</em>
       </div>
       <div class="brief">
-        <h2>作战简报</h2>
-        <p>邪恶科学家 <b>フォゾム</b> 用洗脑装置 <b>ニップ</b> 把联邦士兵变成红军的傀儡。
+        <h2 data-i18n="briefTitle">作战简报</h2>
+        <p data-i18n-html="brief1">邪恶科学家 <b>フォゾム</b> 用洗脑装置 <b>ニップ</b> 把联邦士兵变成红军的傀儡。
         你驾驶攻击母舰 <b>ジェネシス-3</b>，装备能让人清醒的 <b>捕获光束</b>。</p>
-        <p><b class="c-b">蓝 = 自军</b>　<b class="c-r">红 = 敌军</b></p>
-        <p>· 用 <b>导弹</b> 消灭不能捕获的敌人（直升机、ディオロフ）；<br>
+        <p data-i18n-html="brief2"><b class="c-b">蓝 = 自军</b>　<b class="c-r">红 = 敌军</b></p>
+        <p data-i18n-html="brief3">· 用 <b>导弹</b> 消灭不能捕获的敌人（直升机、ディオロフ）；<br>
            · 用 <b>捕获光束</b> 把步兵、キース、HEL-99A、FL-880 变成自己的部队（捕获得分更高）；<br>
            · 光束照射时母舰 <b>无法移动</b>，请在安全位置使用；<br>
            · 用 <b>A+B</b> 把部队派上前线，它们会自动进攻。</p>
-        <p>突破全 6 关，每关必须在时限内打掉大门前 <b>4 座 X-BC 炮台</b> 并冲进中央大门。
+        <p data-i18n-html="brief4">突破全 6 关，每关必须在时限内打掉大门前 <b>4 座 X-BC 炮台</b> 并冲进中央大门。
            超时母舰机动性下降，小心。</p>
       </div>
     </div>
@@ -62,6 +70,7 @@
 
 <script src="assets/js/gfx.js"></script>
 <script src="assets/js/audio.js"></script>
+<script src="assets/js/i18n.js"></script>
 <script src="assets/js/game.js"></script>
 </body>
 </html>
