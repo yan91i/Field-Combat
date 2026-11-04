@@ -23,7 +23,10 @@
   const GRAB_DIST = 13;                                       // 判定捕获成功的距离
   const ROSTER_MAX = 16;                                      // 底部部队栏最多显示的 icon 数
   const PLAYER_RANGE = 140;                                   // 自机导弹射程
-  const ENEMY_BAND_BOT = 172;                                 // 敌军游走区域下边界（相对视野顶部）
+  const ENEMY_BAND_BOT = 132;                                 // 敌军游走区域下边界（相对视野顶部，始终留在自机上方）
+  const ENEMY_BAND_UPPER = 66;                                // 画面上 1/3 分界（相对视野顶部）
+  const ENTER_BOOST = 1.8;                                    // 入场下降速度倍率
+  const ENEMY_DEEP = 70;                                      // 超过该深度视为"贴近底部"（越深越倾向射击）
   const TURRET_RANGE = 150;                                   // 炮台射程
   const TURRET_Y = 150;
   const TURRET_X = [44, 90, 166, 212];
@@ -42,18 +45,18 @@
   const TYPES = ['soldier', 'keith', 'tank', 'fl880', 'heli'];
   const NAME = { soldier: 'SOLDIER', keith: 'KEITH', tank: 'HEL-99A', fl880: 'FL-880', heli: 'LEWIS-T', dioroff: 'DIOROFF' };
 
-  // 设计基准（最慢的是步兵 → 坦克 → 飞机）
+  // 设计基准（最慢的是步兵 → 坦克 → 飞机），整体速度再次下调
   //   步兵：移动最慢、走路的动态、蹲下扛火箭筒射击、射程=自机、被打中一击必杀
   //   坦克：移动慢、射程比自机更远一点、带血条
   //   飞机：移动快、飞行轨迹多变、射程=自机、被打中一击必杀
   // spd = 游走速度；range = 弹丸射程
   const ENEMY = {
-    soldier: { hp: 1, spd: 0.30, cd: 130, dmg: 1, cap: true, kill: 200, capScore: 300, w: 10, h: 10, air: false, fire: 'bazooka', range: 140 },
-    keith: { hp: 2, spd: 0.55, cd: 112, dmg: 1, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'mg', range: 115 },
-    tank: { hp: 5, spd: 0.42, cd: 150, dmg: 2, cap: true, kill: 600, capScore: 700, w: 14, h: 14, air: false, fire: 'shell', range: 160 },
-    fl880: { hp: 2, spd: 0.38, cd: 168, dmg: 2, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'longshell', range: 180 },
-    heli: { hp: 1, spd: 1.05, cd: 118, dmg: 1, cap: false, kill: 500, capScore: 0, w: 14, h: 14, air: true, fire: 'mg', range: 140 },
-    dioroff: { hp: 16, spd: 0.22, cd: 132, dmg: 2, cap: false, kill: 2000, capScore: 0, w: 20, h: 20, air: false, fire: 'dioroff', range: 150 }
+    soldier: { hp: 1, spd: 0.22, cd: 130, dmg: 1, cap: true, kill: 200, capScore: 300, w: 10, h: 10, air: false, fire: 'bazooka', range: 140 },
+    keith: { hp: 2, spd: 0.38, cd: 112, dmg: 1, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'mg', range: 115 },
+    tank: { hp: 5, spd: 0.28, cd: 150, dmg: 2, cap: true, kill: 600, capScore: 700, w: 14, h: 14, air: false, fire: 'shell', range: 160 },
+    fl880: { hp: 2, spd: 0.26, cd: 168, dmg: 2, cap: true, kill: 400, capScore: 500, w: 13, h: 13, air: false, fire: 'longshell', range: 180 },
+    heli: { hp: 1, spd: 0.78, cd: 118, dmg: 1, cap: false, kill: 500, capScore: 0, w: 14, h: 14, air: true, fire: 'mg', range: 140 },
+    dioroff: { hp: 16, spd: 0.16, cd: 132, dmg: 2, cap: false, kill: 2000, capScore: 0, w: 20, h: 20, air: false, fire: 'dioroff', range: 150 }
   };
 
   const ALLY = {
@@ -286,15 +289,22 @@
   function makeEnemy(type, x, y) {
     const st = ENEMY[type];
     const hpMul = 1 + (game.loop - 1) * 0.2;
+    // 入场方向：向下 / 左下 / 右下 随机
+    const dir = [0, -1, 1][ri(0, 2)];
+    const home = st.air ? ri(26, 54) : ri(28, ENEMY_BAND_UPPER);
     return {
       type: type, x: x, y: y,
       hp: Math.ceil(st.hp * hpMul), maxHp: Math.ceil(st.hp * hpMul),
       w: st.w, h: st.h, air: st.air, cap: st.cap,
-      // 游走：不再径直飞出画面，而是留在视野内晃来晃去
-      homeOff: st.air ? ri(56, 112) : ri(24, 156),
+      // 入场 → 游走：先从顶部向下走到画面上 1/3，再转入随机游走
+      state: 'enter',
+      driftX: dir,
+      homeOff: home,                 // 游走基准深度（画面上 1/3 附近）
+      tgtOff: home,                  // 当前纵向漫步目标深度
+      retargetT: ri(90, 240),        // 重新挑选漫步目标的倒计时
       wob: Math.random() * 6.28,
       wobSpd: st.air ? 0.07 : rnd(0.012, 0.026),
-      dirX: Math.random() < 0.5 ? -1 : 1,
+      dirX: dir === 0 ? (Math.random() < 0.5 ? -1 : 1) : dir,
       anim: 0, fireT: 0,
       cd: ri(70, st.cd), grab: false, spin: 0, flash: 0,
       phase: Math.random() * 6.28, t: 0, dead: false
@@ -474,10 +484,10 @@
       AU.sfx('missile');
     }
 
-    // 摄像机
+    // 摄像机：跟随更缓，背景滚动速度随之降低
     let target = p.y - VIEW_OFF;
     target = clamp(target, 0, CAM_MAX);
-    camY += (target - camY) * 0.14;
+    camY += (target - camY) * 0.09;
     camY = clamp(camY, 0, CAM_MAX);
   }
 
@@ -605,33 +615,52 @@
         }
       }
 
-      // 游走：留在视野带内晃来晃去，不径直飞出画面
+      // 入场：从顶部向下（或左下/右下）走到画面上 1/3 处，再转入游走
       e.wob += e.wobSpd;
       e.anim++;
       if (e.fireT > 0) e.fireT--;
-      if (e.air) {
+      if (e.state === 'enter') {
+        e.y += st.spd * ENTER_BOOST;
+        if (Math.random() < 0.01) e.driftX = [0, -1, 1][ri(0, 2)];   // 向下 / 左下 / 右下 随机变化
+        e.x += e.driftX * st.spd * 0.8;
+        if (e.x < 20) { e.x = 20; e.driftX = 1; }
+        if (e.x > W - 20) { e.x = W - 20; e.driftX = -1; }
+        if (e.y - camY >= e.homeOff) e.state = 'wander';
+      } else if (e.air) {
         // 飞机：移动快、轨迹多变（多段正弦叠加成蛇形/8 字）
         e.x += e.dirX * st.spd;
         if (e.x < 18) { e.x = 18; e.dirX = 1; }
         if (e.x > W - 18) { e.x = W - 18; e.dirX = -1; }
-        e.y = camY + e.homeOff + Math.sin(e.wob * 1.7 + e.phase) * 22 + Math.sin(e.wob * 0.7) * 10;
+        e.y = camY + e.homeOff + Math.sin(e.wob * 1.7 + e.phase) * 20 + Math.sin(e.wob * 0.7) * 9;
       } else {
-        // 地面部队：缓慢巡逻 + 向自己的游走高度靠拢
-        e.x += e.dirX * st.spd;
+        // 地面部队：横向随机游走；纵向缓慢漫步，多停在画面上 1/3
+        if (--e.retargetT <= 0) {
+          e.retargetT = ri(90, 240);
+          // 已经贴到下部时一律回到上 1/3，避免大量敌人挤在底部
+          const deepNow = (e.y - camY) > ENEMY_BAND_BOT - 24;
+          e.tgtOff = (deepNow || Math.random() >= 0.25)
+            ? ri(28, ENEMY_BAND_UPPER)
+            : ri(ENEMY_BAND_UPPER + 6, ENEMY_BAND_BOT - 30);
+        }
+        // 越靠近画面底部，移动越慢（越倾向原地射击）
+        const bf = clamp(((e.y - camY) - ENEMY_DEEP) / (ENEMY_BAND_BOT - ENEMY_DEEP), 0, 1);
+        e.x += e.dirX * st.spd * (1 - bf * 0.78);
+        if (Math.random() < 0.004) e.dirX = -e.dirX;
         if (e.x < 20) { e.x = 20; e.dirX = 1; }
         if (e.x > W - 20) { e.x = W - 20; e.dirX = -1; }
-        const ty = camY + e.homeOff + Math.sin(e.wob * 2.1 + e.phase) * 3;
-        e.y += (ty - e.y) * 0.04;
+        const ty = camY + e.tgtOff + Math.sin(e.wob * 2.1 + e.phase) * 4;
+        e.y += (ty - e.y) * 0.025;
       }
       e.x = clamp(e.x, 12, W - 12);
-      // 只压住下边界：敌军从上方缓缓进入视野，不会越过自机飞走
+      // 只压住下边界：敌军始终留在自机上方，不会被压到底部而无法击杀
       if (e.y > camY + ENEMY_BAND_BOT) e.y = camY + ENEMY_BAND_BOT;
 
-      // 射击
+      // 射击：越靠近画面底部越倾向射击（冷却更短）
       e.cd--;
       if (e.cd <= 0 && e.y > camY - 10 && e.y < camY + FIELD_H) {
         enemyFire(e);
-        e.cd = Math.round(st.cd * rnd(0.75, 1.25) / (1 + (game.loop - 1) * 0.10));
+        const deep = clamp(((e.y - camY) - ENEMY_DEEP) / (ENEMY_BAND_BOT - ENEMY_DEEP), 0, 1);
+        e.cd = Math.round(st.cd * rnd(0.75, 1.25) * (1 - 0.45 * deep) / (1 + (game.loop - 1) * 0.10));
       }
 
       // ディオロフ 抓走友军
